@@ -1,16 +1,23 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
+import Loading from "@/components/ui/loading";
+import { pipeline } from "@huggingface/transformers";
 
 const VideoSummary: React.FC = () => {
   const [selectedVideo, setSelectedVideo] = useState<File | null>(null);
   const [videoURL, setVideoURL] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [isModelLoaded, setIsModelLoaded] = useState<boolean>(false);
-  const [summary, setSummary] = useState<string>("");
+  const [contentSummary, setContentSummary] = useState<string>("");
+  const [scenerySummary, setScenerySummary] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<"content" | "scenery">("content");
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [progress, setProgress] = useState<number>(0);
+  const [loadingProgress, setLoadingProgress] = useState<number>(0);
+  const [loadingText, setLoadingText] = useState<string>("Loading AI models...");
+  const [captioningModel, setCaptioningModel] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const synth = useRef<SpeechSynthesis | null>(null);
@@ -110,7 +117,8 @@ const VideoSummary: React.FC = () => {
     setSelectedVideo(file);
     const url = URL.createObjectURL(file);
     setVideoURL(url);
-    setSummary("");
+    setContentSummary("");
+    setScenerySummary("");
   };
 
   // Open file dialog
@@ -123,10 +131,22 @@ const VideoSummary: React.FC = () => {
   // Load AI model
   const loadModel = async () => {
     setIsProcessing(true);
+    setLoadingText("Loading video analysis models...");
     
     try {
-      // Simulate model loading - in a real app this would use transformers.js
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Load image captioning model (will be used for video frames)
+      setLoadingProgress(10);
+      const captioner = await pipeline(
+        "image-to-text", 
+        "Xenova/vit-gpt2-image-captioning",
+        { 
+          progress_callback: (progress) => {
+            setLoadingProgress(10 + (progress.progress * 90));
+          }
+        }
+      );
+      setCaptioningModel(captioner);
+      
       setIsModelLoaded(true);
     } catch (error) {
       console.error("Error loading model:", error);
@@ -135,47 +155,306 @@ const VideoSummary: React.FC = () => {
     }
   };
 
+  // Extract frames from video at regular intervals
+  const extractFrames = async (videoElem: HTMLVideoElement, numFrames = 6): Promise<string[]> => {
+    return new Promise((resolve) => {
+      const frames: string[] = [];
+      const duration = videoElem.duration;
+      const interval = duration / numFrames;
+      let currentFrame = 0;
+      
+      // Create an off-screen canvas for frame extraction
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      
+      if (!context) {
+        resolve([]);
+        return;
+      }
+      
+      canvas.width = videoElem.videoWidth;
+      canvas.height = videoElem.videoHeight;
+      
+      const processFrame = () => {
+        if (currentFrame >= numFrames) {
+          resolve(frames);
+          return;
+        }
+        
+        const time = currentFrame * interval;
+        videoElem.currentTime = time;
+        
+        videoElem.onseeked = () => {
+          // Draw video frame to canvas
+          context.drawImage(videoElem, 0, 0, canvas.width, canvas.height);
+          
+          // Convert canvas to data URL
+          const dataURL = canvas.toDataURL('image/jpeg');
+          frames.push(dataURL);
+          
+          // Process next frame
+          currentFrame++;
+          processFrame();
+        };
+      };
+      
+      processFrame();
+    });
+  };
+
   // Process video to generate summary
   const processVideo = async () => {
-    if (!selectedVideo || !isModelLoaded) return;
+    if (!selectedVideo || !isModelLoaded || !captioningModel || !videoRef.current) return;
     
     setIsProcessing(true);
-    setSummary("");
+    setLoadingText("Analyzing video content...");
+    setContentSummary("");
+    setScenerySummary("");
     
     try {
-      // Simulate video processing - in a real app we would:
-      // 1. Extract frames from the video
-      // 2. Process frames through a vision model
-      // 3. Generate a summary with a language model
+      // Make sure video is loaded
+      await new Promise<void>((resolve) => {
+        if (videoRef.current!.readyState >= 3) {
+          resolve();
+        } else {
+          videoRef.current!.oncanplay = () => resolve();
+        }
+      });
       
-      // Video processing simulation
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Extract frames from video
+      setLoadingProgress(10);
+      setLoadingText("Extracting video frames...");
+      const frames = await extractFrames(videoRef.current);
       
-      // Generate a fake summary for demo purposes
-      const videoName = selectedVideo.name;
-      const videoDuration = videoRef.current?.duration || 0;
-      const durationMinutes = Math.floor(videoDuration / 60);
-      const durationSeconds = Math.floor(videoDuration % 60);
+      // Process each frame to generate captions
+      setLoadingText("Analyzing frames...");
+      const frameCaptions: string[] = [];
       
-      const summaryTemplates = [
-        `This ${durationMinutes}:${durationSeconds.toString().padStart(2, '0')} minute video shows a person demonstrating how to use a product or service. The presenter starts by introducing the topic, then walks through several key features and benefits. The video concludes with a call to action for viewers.`,
-        
-        `The video titled "${videoName}" is a ${durationMinutes}-minute tutorial that explains a step-by-step process. It begins with an overview, then demonstrates each step in detail with clear visual examples. The presenter provides helpful tips throughout and summarizes the main points at the end.`,
-        
-        `This is a short video about nature and wildlife. It features several outdoor scenes with animals in their natural habitat. The footage is mostly steady with occasional panning shots to show the landscape. There's no dialogue, only ambient sounds and background music.`,
-        
-        `The video shows a technology demonstration with various digital interfaces and devices. The presenter explains how the technology works and shows several use cases. There are close-up shots of screens and devices, along with wider shots of the technology in use.`,
-        
-        `This appears to be a personal vlog or social media content. The person in the video is speaking directly to the camera in an indoor setting. They discuss personal experiences and opinions, occasionally showing items or locations relevant to the discussion.`
-      ];
+      for (let i = 0; i < frames.length; i++) {
+        setLoadingProgress(20 + ((i / frames.length) * 40));
+        const frameCaption = await captioningModel(frames[i]);
+        const captionText = Array.isArray(frameCaption) 
+          ? frameCaption[0].generated_text 
+          : frameCaption.generated_text;
+        frameCaptions.push(captionText);
+      }
       
-      const generatedSummary = summaryTemplates[Math.floor(Math.random() * summaryTemplates.length)];
-      setSummary(generatedSummary);
+      // Generate content summary (what happens in the video)
+      setLoadingProgress(60);
+      setLoadingText("Generating content summary...");
+      const contentSummaryText = generateContentSummary(frameCaptions, selectedVideo.name);
+      setContentSummary(contentSummaryText);
+      
+      // Generate scenery summary (visual elements, setting, colors)
+      setLoadingProgress(80);
+      setLoadingText("Generating scenery summary...");
+      const scenerySummaryText = generateScenerySummary(frameCaptions, selectedVideo.name);
+      setScenerySummary(scenerySummaryText);
       
     } catch (error) {
       console.error("Error processing video:", error);
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // Generate content summary from frame captions
+  const generateContentSummary = (captions: string[], filename: string): string => {
+    // Identify key actions and subjects
+    const actions: string[] = [];
+    const subjects: string[] = [];
+    
+    // Extract actions and subjects from captions
+    captions.forEach(caption => {
+      const words = caption.split(' ');
+      
+      // Simple heuristic: verbs are often actions, nouns are often subjects
+      // This is a simplification - a real NLP model would do better
+      words.forEach((word, index) => {
+        if (word.endsWith('ing') && !actions.includes(word)) {
+          actions.push(word);
+        }
+        
+        // Likely to be subjects if they follow "a" or "the"
+        if (index > 0 && (words[index-1] === 'a' || words[index-1] === 'the') && !subjects.includes(word)) {
+          subjects.push(word);
+        }
+      });
+    });
+    
+    // Estimate the overall theme from caption overlap
+    const uniqueCaptions = [...new Set(captions)];
+    const videoDuration = videoRef.current?.duration || 0;
+    const durationMinutes = Math.floor(videoDuration / 60);
+    const durationSeconds = Math.floor(videoDuration % 60);
+    const durationStr = `${durationMinutes}:${durationSeconds.toString().padStart(2, '0')}`;
+    
+    // Generate a detailed multi-paragraph summary
+    return `
+This ${durationStr} minute video titled "${filename}" features ${subjects.slice(0, 3).join(', ')} engaged in ${actions.slice(0, 3).join(', ')}. 
+
+The content begins with ${captions[0].toLowerCase()} and progresses through a series of scenes including ${uniqueCaptions.slice(1, 3).join(' followed by ')}. 
+
+Throughout the video, there are ${subjects.length} distinct subjects or elements visible including ${subjects.slice(0, 5).join(', ')}. The primary activities shown include ${actions.slice(0, 5).join(', ')}.
+
+Based on the visual content, this appears to be a ${getVideoType(captions)} video that would appeal to viewers interested in ${getVideoSubject(captions)}.
+`.trim();
+  };
+
+  // Generate scenery summary from frame captions
+  const generateScenerySummary = (captions: string[], filename: string): string => {
+    // Extract scene elements (locations, colors, lighting)
+    const locations: string[] = [];
+    const colors: string[] = [];
+    const timeOfDay: string[] = [];
+    
+    // Common colors to look for
+    const colorList = ['red', 'blue', 'green', 'yellow', 'white', 'black', 'orange', 'purple', 'pink', 'brown', 'gray', 'silver', 'gold'];
+    
+    // Time indicators to look for
+    const timeList = ['morning', 'afternoon', 'evening', 'night', 'sunset', 'sunrise', 'daytime', 'nighttime', 'sunny', 'dark'];
+    
+    // Location indicators
+    const locationIndicators = ['in', 'at', 'on', 'inside', 'outside'];
+    
+    captions.forEach(caption => {
+      const words = caption.toLowerCase().split(' ');
+      
+      // Extract colors
+      words.forEach(word => {
+        if (colorList.includes(word) && !colors.includes(word)) {
+          colors.push(word);
+        }
+        
+        // Extract time of day
+        if (timeList.includes(word) && !timeOfDay.includes(word)) {
+          timeOfDay.push(word);
+        }
+      });
+      
+      // Extract potential locations
+      words.forEach((word, index) => {
+        if (index > 0 && locationIndicators.includes(words[index-1])) {
+          // Location likely follows location indicators
+          if (!locations.includes(word) && word.length > 3) {
+            locations.push(word);
+          }
+        }
+      });
+    });
+    
+    // Generate a detailed environment/scenery summary
+    const videoDuration = videoRef.current?.duration || 0;
+    const durationMinutes = Math.floor(videoDuration / 60);
+    const durationSeconds = Math.floor(videoDuration % 60);
+    const durationStr = `${durationMinutes}:${durationSeconds.toString().padStart(2, '0')}`;
+    
+    return `
+The visual environment of this ${durationStr} minute video titled "${filename}" predominantly features ${locations.length > 0 ? locations.join(', ') : 'various settings'}.
+
+The color palette includes ${colors.length > 0 ? colors.join(', ') : 'neutral tones'}, creating a ${colors.includes('bright') || colors.includes('white') ? 'bright and vibrant' : 'subdued and atmospheric'} visual aesthetic.
+
+The lighting suggests ${timeOfDay.length > 0 ? `a ${timeOfDay.join(' to ')} setting` : 'indoor illumination'}, which contributes to the overall mood of the scenes.
+
+The visual composition features ${getEnvironmentType(captions)} elements with ${getSpatialDescription(captions)} spatial arrangement. The background elements include ${getBackgroundElements(captions)}.
+
+The overall visual style of the video could be described as ${getVisualStyle(captions)} with ${colors.length > 0 ? 'distinctive color contrasts' : 'subtle tonal variations'}.
+`.trim();
+  };
+
+  // Helper function to determine video type
+  const getVideoType = (captions: string[]): string => {
+    const text = captions.join(' ').toLowerCase();
+    
+    if (text.includes('tutorial') || text.includes('how to') || text.includes('step')) {
+      return 'tutorial or instructional';
+    } else if (text.includes('talk') || text.includes('present') || text.includes('speech')) {
+      return 'presentation or talk';
+    } else if (text.includes('nature') || text.includes('wild') || text.includes('landscape')) {
+      return 'nature or documentary';
+    } else if (text.includes('interview') || text.includes('conversation')) {
+      return 'interview or conversational';
+    } else {
+      return 'informational or entertainment';
+    }
+  };
+
+  // Helper function to determine video subject
+  const getVideoSubject = (captions: string[]): string => {
+    const text = captions.join(' ').toLowerCase();
+    
+    if (text.includes('tech') || text.includes('computer') || text.includes('digital')) {
+      return 'technology and digital media';
+    } else if (text.includes('food') || text.includes('cook') || text.includes('recipe')) {
+      return 'cooking and food preparation';
+    } else if (text.includes('sport') || text.includes('game') || text.includes('play')) {
+      return 'sports and physical activities';
+    } else if (text.includes('art') || text.includes('design') || text.includes('creat')) {
+      return 'arts and creative pursuits';
+    } else if (text.includes('nature') || text.includes('animal') || text.includes('plant')) {
+      return 'nature and wildlife';
+    } else {
+      return 'general lifestyle and culture';
+    }
+  };
+
+  // Helper function to determine environment type
+  const getEnvironmentType = (captions: string[]): string => {
+    const text = captions.join(' ').toLowerCase();
+    
+    if (text.includes('urban') || text.includes('city') || text.includes('building')) {
+      return 'urban and architectural';
+    } else if (text.includes('nature') || text.includes('tree') || text.includes('mountain')) {
+      return 'natural and organic';
+    } else if (text.includes('indoor') || text.includes('room') || text.includes('inside')) {
+      return 'interior and contained';
+    } else {
+      return 'mixed environmental';
+    }
+  };
+
+  // Helper function for spatial description
+  const getSpatialDescription = (captions: string[]): string => {
+    const text = captions.join(' ').toLowerCase();
+    
+    if (text.includes('wide') || text.includes('panorama') || text.includes('landscape')) {
+      return 'expansive and wide-angle';
+    } else if (text.includes('close') || text.includes('detail') || text.includes('macro')) {
+      return 'intimate and close-up';
+    } else {
+      return 'balanced and mixed-distance';
+    }
+  };
+
+  // Helper function for background elements
+  const getBackgroundElements = (captions: string[]): string => {
+    const text = captions.join(' ').toLowerCase();
+    
+    if (text.includes('sky') || text.includes('cloud') || text.includes('horizon')) {
+      return 'skies, horizons, and atmospheric elements';
+    } else if (text.includes('wall') || text.includes('furniture') || text.includes('room')) {
+      return 'interior architectural elements and furnishings';
+    } else if (text.includes('crowd') || text.includes('people') || text.includes('audience')) {
+      return 'people and social groupings';
+    } else {
+      return 'textural and environmental context';
+    }
+  };
+
+  // Helper function for visual style
+  const getVisualStyle = (captions: string[]): string => {
+    const text = captions.join(' ').toLowerCase();
+    
+    if (text.includes('modern') || text.includes('sleek') || text.includes('tech')) {
+      return 'modern and sleek';
+    } else if (text.includes('rustic') || text.includes('vintage') || text.includes('old')) {
+      return 'rustic or vintage';
+    } else if (text.includes('bright') || text.includes('vibrant') || text.includes('colorful')) {
+      return 'bright and vibrant';
+    } else if (text.includes('dark') || text.includes('moody') || text.includes('shadow')) {
+      return 'moody and atmospheric';
+    } else {
+      return 'balanced and naturalistic';
     }
   };
 
@@ -193,7 +472,11 @@ const VideoSummary: React.FC = () => {
 
   // Speak summary text
   const speakSummary = () => {
-    if (!synth.current || !utterance.current || !summary) return;
+    if (!synth.current || !utterance.current) return;
+    
+    const textToSpeak = activeTab === "content" ? contentSummary : scenerySummary;
+    
+    if (!textToSpeak) return;
     
     // Cancel current speech if speaking
     if (synth.current.speaking) {
@@ -202,7 +485,7 @@ const VideoSummary: React.FC = () => {
       return;
     }
     
-    utterance.current.text = summary;
+    utterance.current.text = textToSpeak;
     setIsSpeaking(true);
     synth.current.speak(utterance.current);
   };
@@ -215,7 +498,8 @@ const VideoSummary: React.FC = () => {
     
     setSelectedVideo(null);
     setVideoURL(null);
-    setSummary("");
+    setContentSummary("");
+    setScenerySummary("");
     setProgress(0);
     
     if (synth.current && synth.current.speaking) {
@@ -233,7 +517,7 @@ const VideoSummary: React.FC = () => {
       >
         <h1 className="text-3xl font-bold mb-6">Video Summarizer</h1>
         <p className="text-muted-foreground mb-8">
-          Upload a video to get an AI-generated summary, with both text and voice options.
+          Upload a video to get detailed AI-generated summaries, with both text and voice options.
         </p>
       </motion.div>
 
@@ -281,7 +565,7 @@ const VideoSummary: React.FC = () => {
                 onClick={processVideo}
                 disabled={isProcessing}
               >
-                {isProcessing ? 'Processing...' : 'Generate Summary'}
+                {isProcessing ? 'Processing...' : 'Generate Summaries'}
               </motion.button>
             )}
           </div>
@@ -346,10 +630,10 @@ const VideoSummary: React.FC = () => {
         {/* Summary Display */}
         <div>
           <div className="bg-card border border-border rounded-lg p-4 h-full">
-            <h2 className="text-xl font-semibold mb-4 flex items-center justify-between">
-              <span>Video Summary</span>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">Video Summary</h2>
               
-              {summary && (
+              {(contentSummary || scenerySummary) && (
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -376,18 +660,58 @@ const VideoSummary: React.FC = () => {
                   )}
                 </motion.button>
               )}
-            </h2>
+            </div>
             
-            {summary ? (
+            {/* Summary Type Tabs */}
+            {(contentSummary || scenerySummary) && (
+              <div className="mb-4 border-b border-border">
+                <div className="flex">
+                  <button
+                    className={`py-2 px-4 font-medium ${
+                      activeTab === "content" 
+                        ? "text-primary border-b-2 border-primary" 
+                        : "text-muted-foreground"
+                    }`}
+                    onClick={() => setActiveTab("content")}
+                  >
+                    Content Summary
+                  </button>
+                  <button
+                    className={`py-2 px-4 font-medium ${
+                      activeTab === "scenery" 
+                        ? "text-primary border-b-2 border-primary" 
+                        : "text-muted-foreground"
+                    }`}
+                    onClick={() => setActiveTab("scenery")}
+                  >
+                    Visual/Scenery Summary
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {activeTab === "content" && contentSummary ? (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="prose prose-invert max-w-none"
               >
-                <p className="text-foreground">{summary}</p>
+                <div className="text-foreground whitespace-pre-line">
+                  {contentSummary}
+                </div>
+              </motion.div>
+            ) : activeTab === "scenery" && scenerySummary ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="prose prose-invert max-w-none"
+              >
+                <div className="text-foreground whitespace-pre-line">
+                  {scenerySummary}
+                </div>
               </motion.div>
             ) : (
-              <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+              <div className="h-full flex flex-col items-center justify-center text-muted-foreground py-12">
                 {isProcessing ? (
                   <div className="text-center">
                     <div className="inline-block w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -420,7 +744,7 @@ const VideoSummary: React.FC = () => {
           <div className="bg-card p-4 rounded-lg border border-border">
             <h3 className="text-lg font-medium mb-2">Voice Output</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Summary can be read aloud for visually impaired users.
+              Summaries can be read aloud for visually impaired users.
             </p>
             <div className="flex items-center gap-2">
               <span className="text-sm">Status:</span>
@@ -438,6 +762,10 @@ const VideoSummary: React.FC = () => {
                 <span className="font-mono bg-muted px-2 py-0.5 rounded">Space</span>
               </li>
               <li className="flex justify-between">
+                <span>Toggle Summary Type</span>
+                <span className="font-mono bg-muted px-2 py-0.5 rounded">T</span>
+              </li>
+              <li className="flex justify-between">
                 <span>Read Summary</span>
                 <span className="font-mono bg-muted px-2 py-0.5 rounded">R</span>
               </li>
@@ -448,25 +776,11 @@ const VideoSummary: React.FC = () => {
 
       {/* Loading Overlay */}
       {isProcessing && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="fixed inset-0 flex items-center justify-center bg-background/80 z-50"
-        >
-          <div className="bg-card p-6 rounded-lg shadow-lg max-w-md w-full">
-            <h3 className="text-lg font-medium mb-4">
-              {isModelLoaded ? 'Analyzing Video' : 'Loading AI Model'}
-            </h3>
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-primary rounded-full animate-shimmer bg-shimmer bg-[length:200%_100%]"></div>
-            </div>
-            <p className="text-sm text-muted-foreground mt-4">
-              {isModelLoaded 
-                ? 'Analyzing video content locally, no data leaves your device.'
-                : 'Loading AI models locally, no data leaves your device.'}
-            </p>
-          </div>
-        </motion.div>
+        <Loading
+          text={loadingText}
+          fullScreen={true}
+          progress={loadingProgress}
+        />
       )}
     </div>
   );
