@@ -1,73 +1,83 @@
-# Welcome to your Lovable project
+# VisionAI Assistant
 
-## Project info
+A fully client-side web application with a strong focus on accessibility, performance, and modern UX. All features run entirely in the browser, with no backend or internet connection required after initial load.
 
-**URL**: https://lovable.dev/projects/ca5dccf7-164b-419b-9ba2-17a34c7f2bd4
+## Features
 
-## How can I edit this code?
+### 1. Image Search by Natural Language Query
+- Upload images from your device
+- Process them locally using browser AI
+- Search using natural language (e.g., "red car in sand")
+- Results are sorted by similarity to your query
 
-There are several ways of editing your application.
+### 2. Live Video Captioning
+- Real-time descriptions of webcam feed
+- Text display and voice output for accessibility
+- Multiple camera support
+- Designed for both sighted and blind users
 
-**Use Lovable**
+### 3. Video Summarizer
+- Upload any video file
+- Get a concise, human-like summary
+- Available as text and spoken output
+- Works efficiently on videos up to 5 minutes
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/ca5dccf7-164b-419b-9ba2-17a34c7f2bd4) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
+## Technical Stack
 
 This project is built with:
-
 - Vite
 - TypeScript
 - React
-- shadcn-ui
 - Tailwind CSS
+- shadcn-ui
+- Framer Motion for animations
+- Hugging Face Transformers.js for AI processing
+- Web Speech API for text-to-speech
 
-## How can I deploy this project?
+## Privacy First Approach
 
-Simply open [Lovable](https://lovable.dev/projects/ca5dccf7-164b-419b-9ba2-17a34c7f2bd4) and click on Share -> Publish.
+- **100% Client-Side**: No server communication, all processing happens in your browser
+- **Data Never Leaves Your Device**: Your images and videos stay local
+- **Works Offline**: After initial load, no internet connection needed
 
-## Can I connect a custom domain to my Lovable project?
+## Getting Started
 
-Yes, you can!
+```bash
+# Clone the repository
+git clone <YOUR_GIT_URL>
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+# Navigate to the project directory
+cd <YOUR_PROJECT_NAME>
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+# Install dependencies
+npm install
+
+# Start the development server
+npm run dev
+```
+
+## Accessibility Features
+
+- Voice output for all AI-generated content
+- High contrast UI elements
+- Keyboard shortcuts for common operations
+- Screen reader compatible interface
+- Responsive design for all devices
+
+## Browser Compatibility
+
+This application uses modern web technologies and works best in:
+- Chrome 89+
+- Firefox 90+
+- Safari 15+
+- Edge 89+
+
+Mobile browsers are also supported, though performance may vary depending on device capabilities.
+
+## Contributing
+
+Contributions are welcome! Feel free to submit pull requests or open issues to improve the application.
+
+## License
+
+This project is open source and available under the MIT license.

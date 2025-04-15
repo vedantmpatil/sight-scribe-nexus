@@ -1,0 +1,17 @@
+
+{
+  "name": "VisionAI Assistant",
+  "short_name": "VisionAI",
+  "description": "Offline AI vision tools including image search, live captions, and video summarizing",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1729",
+  "theme_color": "#8b5cf6",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}
