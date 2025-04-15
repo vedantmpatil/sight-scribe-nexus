@@ -7,12 +7,14 @@ interface LoadingProps {
   text?: string;
   className?: string;
   fullScreen?: boolean;
+  progress?: number;
 }
 
 export const Loading: React.FC<LoadingProps> = ({
   text = "Loading AI models...",
   className,
   fullScreen = false,
+  progress,
 }) => {
   const content = (
     <div className={cn(
@@ -23,14 +25,23 @@ export const Loading: React.FC<LoadingProps> = ({
       <div className="bg-card p-6 rounded-lg shadow-lg max-w-md w-full">
         <h3 className="text-lg font-medium mb-4">{text}</h3>
         <div className="h-2 bg-muted rounded-full overflow-hidden">
-          <motion.div 
-            className="h-full bg-primary rounded-full"
-            initial={{ width: 0 }}
-            animate={{ 
-              width: "100%",
-              transition: { duration: 2, repeat: Infinity }
-            }}
-          />
+          {progress !== undefined ? (
+            <motion.div 
+              className="h-full bg-primary rounded-full"
+              initial={{ width: "0%" }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 0.3 }}
+            />
+          ) : (
+            <motion.div 
+              className="h-full bg-primary rounded-full"
+              initial={{ width: 0 }}
+              animate={{ 
+                width: "100%",
+                transition: { duration: 2, repeat: Infinity }
+              }}
+            />
+          )}
         </div>
         <p className="text-sm text-muted-foreground mt-4">
           Processing locally, no data leaves your device.
