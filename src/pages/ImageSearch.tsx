@@ -71,10 +71,15 @@ const ImageSearch: React.FC = () => {
       const visionModel = await pipeline(
         "image-to-text", 
         "Xenova/vit-gpt2-image-captioning",
-        { progress_callback: (progressInfo) => {
-          // Use the updated property from progressInfo
-          setLoadingProgress(progressInfo.status === 'progress' && progressInfo.value ? progressInfo.value * 100 : 0);
-        }}
+        { 
+          progress_callback: (progressInfo: any) => {
+            if (progressInfo.status === 'progress' && typeof progressInfo.value === 'number') {
+              setLoadingProgress(progressInfo.value * 100);
+            } else {
+              setLoadingProgress(0);
+            }
+          }
+        }
       );
       
       setModel(visionModel);

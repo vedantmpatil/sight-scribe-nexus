@@ -103,8 +103,11 @@ const LiveCaptions: React.FC = () => {
         "image-classification", 
         "Xenova/resnet-50", 
         { 
-          progress_callback: (progressInfo) => {
-            setLoadingProgress(10 + ((progressInfo.status === 'progress' && progressInfo.value ? progressInfo.value : 0) * 40));
+          progress_callback: (progressInfo: any) => {
+            const progressValue = progressInfo.status === 'progress' && typeof progressInfo.value === 'number' 
+              ? progressInfo.value 
+              : 0;
+            setLoadingProgress(10 + (progressValue * 40));
           }
         }
       );
@@ -117,8 +120,11 @@ const LiveCaptions: React.FC = () => {
         "image-to-text", 
         "Xenova/vit-gpt2-image-captioning",
         { 
-          progress_callback: (progressInfo) => {
-            setLoadingProgress(50 + ((progressInfo.status === 'progress' && progressInfo.value ? progressInfo.value : 0) * 50));
+          progress_callback: (progressInfo: any) => {
+            const progressValue = progressInfo.status === 'progress' && typeof progressInfo.value === 'number' 
+              ? progressInfo.value 
+              : 0;
+            setLoadingProgress(50 + (progressValue * 50));
           }
         }
       );

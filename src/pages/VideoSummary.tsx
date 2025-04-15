@@ -140,8 +140,11 @@ const VideoSummary: React.FC = () => {
         "image-to-text", 
         "Xenova/vit-gpt2-image-captioning",
         { 
-          progress_callback: (progressInfo) => {
-            setLoadingProgress(10 + ((progressInfo.status === 'progress' && progressInfo.value ? progressInfo.value : 0) * 90));
+          progress_callback: (progressInfo: any) => {
+            const progressValue = progressInfo.status === 'progress' && typeof progressInfo.value === 'number' 
+              ? progressInfo.value 
+              : 0;
+            setLoadingProgress(10 + (progressValue * 90));
           }
         }
       );
