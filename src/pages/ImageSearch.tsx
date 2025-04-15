@@ -67,7 +67,7 @@ const ImageSearch: React.FC = () => {
     setLoadingText("Loading image understanding models...");
     
     try {
-      // Load the CLIP model for image-to-text embedding
+      // Load the image captioning model
       const visionModel = await pipeline(
         "image-to-text", 
         "Xenova/vit-gpt2-image-captioning",
@@ -108,7 +108,9 @@ const ImageSearch: React.FC = () => {
         const captionResult = await model(imageURLs[i]);
         const caption = Array.isArray(captionResult) 
           ? captionResult.map((r: any) => r.generated_text).join(". ")
-          : captionResult.generated_text;
+          : typeof captionResult === 'object' && captionResult.generated_text
+            ? captionResult.generated_text
+            : "No caption available";
         
         // Extract keywords from the caption
         const keywords = extractKeywords(caption);
@@ -127,7 +129,7 @@ const ImageSearch: React.FC = () => {
         file,
         url: imageURLs[index],
         similarity: 1, // Default similarity
-        keywords: embeddings[index].keywords
+        keywords: embeddings[index]?.keywords || []
       }));
       
       setSearchResults(initialResults);
@@ -173,7 +175,7 @@ const ImageSearch: React.FC = () => {
         file,
         url: imageURLs[index],
         similarity: 1,
-        keywords: imageEmbeddings[index].keywords
+        keywords: imageEmbeddings[index]?.keywords || []
       }));
       
       setSearchResults(allResults);
@@ -189,7 +191,7 @@ const ImageSearch: React.FC = () => {
         )
       );
       
-      const similarity = matchingKeywords.length / searchKeywords.length;
+      const similarity = matchingKeywords.length > 0 ? matchingKeywords.length / Math.max(searchKeywords.length, 1) : 0;
       
       return {
         file: selectedImages[index],

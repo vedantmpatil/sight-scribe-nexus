@@ -238,7 +238,9 @@ const VideoSummary: React.FC = () => {
         const frameCaption = await captioningModel(frames[i]);
         const captionText = Array.isArray(frameCaption) 
           ? frameCaption[0].generated_text 
-          : frameCaption.generated_text;
+          : typeof frameCaption === 'object' && frameCaption.generated_text
+            ? frameCaption.generated_text
+            : "No caption available";
         frameCaptions.push(captionText);
       }
       
@@ -296,7 +298,7 @@ const VideoSummary: React.FC = () => {
     return `
 This ${durationStr} minute video titled "${filename}" features ${subjects.slice(0, 3).join(', ')} engaged in ${actions.slice(0, 3).join(', ')}. 
 
-The content begins with ${captions[0].toLowerCase()} and progresses through a series of scenes including ${uniqueCaptions.slice(1, 3).join(' followed by ')}. 
+The content begins with ${captions[0]?.toLowerCase() || 'a scene'} and progresses through a series of scenes including ${uniqueCaptions.slice(1, 3).join(' followed by ')}. 
 
 Throughout the video, there are ${subjects.length} distinct subjects or elements visible including ${subjects.slice(0, 5).join(', ')}. The primary activities shown include ${actions.slice(0, 5).join(', ')}.
 

@@ -153,12 +153,16 @@ const LiveCaptions: React.FC = () => {
       const captionResult = await captioningModel(imageSrc);
       let captionText = Array.isArray(captionResult) 
         ? captionResult[0].generated_text 
-        : captionResult.generated_text;
+        : typeof captionResult === 'object' && captionResult.generated_text
+          ? captionResult.generated_text
+          : "No caption available";
       
       // Step 3: Enhance the caption with detected objects for more detail
-      let detectedObjects = detections
-        .filter((det: any) => det.score > 0.2)  // Filter low confidence
-        .map((det: any) => det.label.split(',')[0].trim());  // Clean up labels
+      let detectedObjects = Array.isArray(detections) 
+        ? detections
+            .filter((det: any) => det.score > 0.2)  // Filter low confidence
+            .map((det: any) => det.label.split(',')[0].trim())  // Clean up labels
+        : [];
       
       detectedObjects = [...new Set(detectedObjects)];  // Remove duplicates
       
@@ -174,7 +178,7 @@ const LiveCaptions: React.FC = () => {
       if (objectsToAdd.length > 0) {
         if (objectsToAdd.length === 1) {
           enhancedCaption += ` with a ${objectsToAdd[0]}`;
-        } else {
+        } else if (objectsToAdd.length > 1) {
           const lastObj = objectsToAdd.pop();
           enhancedCaption += ` with ${objectsToAdd.join(', ')} and a ${lastObj}`;
         }
